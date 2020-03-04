@@ -19,6 +19,19 @@ defmodule TDMS.Parser.ValueParser do
   #
   #  Integers, floats and NI Timestamps can be stored in big or little endian format
   #  depending on the bitmask value in the ToC (Table of Contents).
+  #
+  # Unsupported data types:
+  #   typedef enum {
+  #     tdsTypeVoid,
+  #     tdsTypeExtendedFloat,
+  #     tdsTypeSingleFloatWithUnit=0x19,
+  #     tdsTypeDoubleFloatWithUnit,
+  #     tdsTypeExtendedFloatWithUnit,
+  #     tdsTypeFixedPoint=0x4F,
+  #     tdsTypeComplexSingleFloat=0x08000c,
+  #     tdsTypeComplexDoubleFloat=0x10000d,
+  #     tdsTypeDAQmxRawData=0xFFFFFFFF
+  #   } tdsDataType;
 
   alias TDMS.Parser.ParseError
 

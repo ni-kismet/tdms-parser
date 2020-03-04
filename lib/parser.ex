@@ -92,14 +92,109 @@ defmodule TDMS.Parser do
   """
   def parse(stream) do
     try do
+      tstart = start = System.monotonic_time(:microsecond)
       {:ok} = validate_tdms_file(stream)
-
+      duration1 = System.monotonic_time(:microsecond) - start
+      start = System.monotonic_time(:microsecond)
       {:ok, state, _stream} = parse(stream, State.new())
+      duration2 = System.monotonic_time(:microsecond) - start
 
-      build_tdms_file_hierarchy(state)
+      IO.puts(
+        "\r\n BBBB.1.1 parse(stream) state.parse_lead_in_count=#{
+          inspect(state.parse_lead_in_count)
+        } state.parse_lead_in_usec=#{inspect(state.parse_lead_in_usec)}"
+      )
+
+      IO.puts(
+        "\r\n BBBB.1.2 parse(stream) state.parse_raw_data_count=#{
+          inspect(state.parse_raw_data_count)
+        } state.parse_raw_data_usec=#{inspect(state.parse_raw_data_usec)}"
+      )
+
+      IO.puts(
+        "\r\n BBBB.1.3 parse(stream) state.parse_metadata_count=#{
+          inspect(state.parse_metadata_count)
+        } state.parse_metadata_usec=#{inspect(state.parse_metadata_usec)}"
+      )
+
+      IO.puts(
+        "\r\n BBBB.1.3.1 parse(stream) state.parse_path_preamble_usec=#{
+          inspect(state.parse_path_preamble_usec)
+        }"
+      )
+
+      IO.puts(
+        "\r\n BBBB.1.3.2 parse(stream) state.parse_path_read_raw_data_index_usec=#{
+          inspect(state.parse_path_read_raw_data_index_usec)
+        }"
+      )
+
+      IO.puts(
+        "\r\n BBBB.1.3.3 parse(stream) state.parse_property_count=#{
+          inspect(state.parse_property_count)
+        }"
+      )
+
+      IO.puts(
+        "\r\n BBBB.1.4 parse(stream) state.<all>(sec)=#{
+          inspect(
+            (state.parse_metadata_usec + state.parse_lead_in_usec + state.parse_raw_data_usec) /
+              1_000_000
+          )
+        }"
+      )
+
+      start = System.monotonic_time(:microsecond)
+      {state, _result} = build_tdms_file_hierarchy(state)
+      duration3 = System.monotonic_time(:microsecond) - start
+      tduration = System.monotonic_time(:microsecond) - tstart
+
+      IO.puts(
+        "\r\n BBBB.2 build_tdms_file_hierarchy(state) state.parse_channel_count=#{
+          inspect(state.parse_channel_count)
+        }"
+      )
+
+      IO.puts("\r\n BBBB.3 parse(stream) tduration=#{inspect(tduration / 1_000_000)}")
+
+      IO.puts(
+        "\r\n BBBB.4   parse(stream) validate_tdms_file(stream) duration1=#{
+          inspect(duration1 / 1_000_000)
+        } duration1(usec)=#{inspect(duration1)}"
+      )
+
+      IO.puts(
+        "\r\n BBBB.5   parse(stream) parse(stream, state) duration2=#{
+          inspect(duration2 / 1_000_000)
+        }"
+      )
+
+      IO.puts(
+        "\r\n BBBB.6   parse(stream) build_tdms_file_hierarchy(state) duration3=#{
+          inspect(duration3 / 1_000_000)
+        }"
+      )
+
+      # result
     catch
       :throw, %ParseError{message: message} -> {:error, message}
     end
+  end
+
+  def parse_file(path) do
+    IO.puts("\r\n AAAA.1 About to parse #{path}")
+    start = System.monotonic_time(:microsecond)
+    stream = File.read!(path)
+    duration = System.monotonic_time(:microsecond) - start
+
+    IO.puts("\r\n AAAA.2 File.read!() duration usec=#{inspect(duration)}")
+
+    start = System.monotonic_time(:microsecond)
+    result = parse(stream)
+    duration = System.monotonic_time(:microsecond) - start
+    IO.puts("\r\n AAAA.3 parse() duration usec=#{inspect(duration)} ")
+    IO.puts("\r\n AAAA.4 parse() result=#{inspect(result)} ")
+    result
   end
 
   defp validate_tdms_file(stream) do
@@ -116,22 +211,57 @@ defmodule TDMS.Parser do
   end
 
   defp parse(stream, state) do
+    start = System.monotonic_time(:microsecond)
     result = parse_lead_in(stream)
+    duration = System.monotonic_time(:microsecond) - start
+
+    new_state = %{
+      state
+      | parse_lead_in_count: state.parse_lead_in_count + 1,
+        parse_lead_in_usec: state.parse_lead_in_usec + duration
+    }
 
     case result do
       {:ok, :empty, stream} ->
-        state = State.set_lead_in(state, nil)
+        state = State.set_lead_in(new_state, nil)
         {:ok, state, stream}
 
       {:ok, :no_lead_in, stream} ->
-        {state, stream} = parse_raw_data(stream, state)
-        parse(stream, state)
+        start = System.monotonic_time(:microsecond)
+        {state, stream} = parse_raw_data(stream, new_state)
+        duration = System.monotonic_time(:microsecond) - start
+
+        new_state = %{
+          state
+          | parse_raw_data_count: state.parse_raw_data_count + 1,
+            parse_raw_data_usec: state.parse_raw_data_usec + duration
+        }
+
+        parse(stream, new_state)
 
       {:ok, lead_in, stream} ->
-        state = State.set_lead_in(state, lead_in)
+        state = State.set_lead_in(new_state, lead_in)
+        start = System.monotonic_time(:microsecond)
         {state, stream} = parse_metadata(stream, state)
-        {state, stream} = parse_raw_data(stream, state)
-        parse(stream, state)
+        duration = System.monotonic_time(:microsecond) - start
+
+        new_state = %{
+          state
+          | parse_metadata_count: state.parse_metadata_count + 1,
+            parse_metadata_usec: state.parse_metadata_usec + duration
+        }
+
+        start = System.monotonic_time(:microsecond)
+        {state, stream} = parse_raw_data(stream, new_state)
+        duration = System.monotonic_time(:microsecond) - start
+
+        new_state = %{
+          state
+          | parse_raw_data_count: state.parse_raw_data_count + 1,
+            parse_raw_data_usec: state.parse_raw_data_usec + duration
+        }
+
+        parse(stream, new_state)
     end
   end
 
@@ -204,35 +334,40 @@ defmodule TDMS.Parser do
     grouped_paths =
       Enum.group_by(state.paths, fn {path, _value} -> TDMS.Parser.Path.depth(path) end)
 
-    channels = build_channels(state, grouped_paths[3] || [])
+    {new_state, channels} = build_channels(state, grouped_paths[3] || [])
     groups = build_groups(grouped_paths[2] || [], channels)
     {file_path, %{properties: properties}} = List.first(grouped_paths[1])
-    TDMS.File.new(file_path, properties, groups)
+    {new_state, TDMS.File.new(file_path, properties, groups)}
   end
 
   defp build_channels(state, paths) do
-    sort_paths(paths)
-    |> Enum.map(fn {path, %{raw_data_index: raw_data_index, properties: properties}} ->
-      data = State.get_data(state, path)
-      name = TDMS.Parser.Path.get_name(path)
-      name_property = TDMS.Property.new("name", :string, name)
+    new_state = %{state | parse_channel_count: state.parse_channel_count + Enum.count(paths)}
 
-      type_property =
-        TDMS.Property.new(
-          "datatype",
-          :string,
-          ValueParser.data_type_to_property_value(raw_data_index.data_type)
+    result =
+      sort_paths(paths)
+      |> Enum.map(fn {path, %{raw_data_index: raw_data_index, properties: properties}} ->
+        data = State.get_data(new_state, path)
+        name = TDMS.Parser.Path.get_name(path)
+        name_property = TDMS.Property.new("name", :string, name)
+
+        type_property =
+          TDMS.Property.new(
+            "datatype",
+            :string,
+            ValueParser.data_type_to_property_value(raw_data_index.data_type)
+          )
+
+        TDMS.Channel.new(
+          path,
+          name,
+          raw_data_index.data_type,
+          length(data),
+          [name_property | [type_property | properties]],
+          data
         )
+      end)
 
-      TDMS.Channel.new(
-        path,
-        name,
-        raw_data_index.data_type,
-        length(data),
-        [name_property | [type_property | properties]],
-        data
-      )
-    end)
+    {new_state, result}
   end
 
   defp sort_paths(paths) do
@@ -240,19 +375,47 @@ defmodule TDMS.Parser do
   end
 
   defp build_groups(paths, channels) do
-    sort_paths(paths)
+    sorted_paths = sort_paths(paths)
+    group_to_channels_map = build_group_to_channels_map(channels)
+
+    sorted_paths
     |> Enum.map(fn {path, %{properties: properties}} ->
-      filtered_channels = filter_channel_by_group_path(channels, path)
       name = TDMS.Parser.Path.get_name(path)
       name_property = TDMS.Property.new("name", :string, name)
-      TDMS.Group.new(path, name, [name_property | properties], filtered_channels)
+
+      TDMS.Group.new(
+        path,
+        name,
+        [name_property | properties],
+        Map.get(group_to_channels_map, path)
+      )
     end)
   end
 
-  defp filter_channel_by_group_path(channels, group_path) do
-    channels
-    |> Enum.filter(fn channel -> TDMS.Parser.Path.is_child(channel.path, group_path) end)
-    |> Enum.uniq_by(fn channel -> channel.path end)
+  # defp dump_groups(prefix, groups) do
+  #   IO.puts("\r\n#{prefix}")
+  #   for group <- groups do
+  #     IO.puts(
+  #       "\r\n   path=#{inspect(group.path)} channel count=#{inspect(Enum.count(group.channels))}"
+  #     )
+  #   end
+  #   IO.puts("\r\n======================================")
+  # end
+
+  defp build_group_to_channels_map(channels) do
+    build_group_to_channels_map(channels, %{})
+  end
+
+  defp build_group_to_channels_map([], output_map), do: output_map
+
+  defp build_group_to_channels_map([first_channel | remaining], output_map) do
+    group_path = TDMS.Parser.Path.get_parent(first_channel.path)
+    channel_list = Map.get(output_map, group_path, [])
+
+    build_group_to_channels_map(
+      remaining,
+      Map.put(output_map, group_path, List.insert_at(channel_list, -1, first_channel))
+    )
   end
 
   defp parse_paths(stream, 0, state) do
@@ -265,10 +428,22 @@ defmodule TDMS.Parser do
   end
 
   defp parse_path(stream, state) do
+    start = System.monotonic_time(:microsecond)
     {path, stream} = ValueParser.parse_string(stream, state.lead_in.endian)
     <<raw_data_index::binary-size(4), stream::binary>> = stream
+    duration = System.monotonic_time(:microsecond) - start
+    new_state = %{state | parse_path_preamble_usec: state.parse_path_preamble_usec + duration}
 
-    read_raw_data_index(stream, path, raw_data_index, state)
+    start = System.monotonic_time(:microsecond)
+    {state, stream} = read_raw_data_index(stream, path, raw_data_index, new_state)
+    duration = System.monotonic_time(:microsecond) - start
+
+    new_state = %{
+      state
+      | parse_path_read_raw_data_index_usec: state.parse_path_read_raw_data_index_usec + duration
+    }
+
+    {new_state, stream}
   end
 
   defp read_raw_data_index(stream, path, raw_data_index, state) do
@@ -284,8 +459,13 @@ defmodule TDMS.Parser do
 
         {properties, stream} = parse_properties(stream, number_of_properties, state, [])
 
-        state =
+        new_state = %{
           state
+          | parse_property_count: state.parse_property_count + number_of_properties
+        }
+
+        state =
+          new_state
           |> State.add_metadata(path, properties, raw_data_index)
           |> State.add_raw_data_index(raw_data_index)
 

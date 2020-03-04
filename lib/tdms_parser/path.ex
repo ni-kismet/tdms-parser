@@ -22,6 +22,10 @@ defmodule TDMS.Parser.Path do
     |> List.last()
   end
 
+  def get_parent(path) do
+    String.trim_trailing(path, "/'" <> get_name(path) <> "'")
+  end
+
   defp split_path(path) do
     split_path(path, false, "", [])
   end
