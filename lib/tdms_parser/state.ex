@@ -8,34 +8,14 @@ defmodule TDMS.Parser.State do
   defstruct [
     :lead_in,
     :paths,
-    :raw_data_indexes,
-    :parse_lead_in_count,
-    :parse_lead_in_usec,
-    :parse_raw_data_count,
-    :parse_raw_data_usec,
-    :parse_metadata_count,
-    :parse_metadata_usec,
-    :parse_path_preamble_usec,
-    :parse_path_read_raw_data_index_usec,
-    :parse_property_count,
-    :parse_channel_count
+    :raw_data_indexes
   ]
 
   def new() do
     %__MODULE__{
       lead_in: nil,
       paths: %{},
-      raw_data_indexes: [],
-      parse_lead_in_count: 0,
-      parse_lead_in_usec: 0,
-      parse_raw_data_count: 0,
-      parse_raw_data_usec: 0,
-      parse_metadata_count: 0,
-      parse_metadata_usec: 0,
-      parse_path_preamble_usec: 0,
-      parse_path_read_raw_data_index_usec: 0,
-      parse_property_count: 0,
-      parse_channel_count: 0
+      raw_data_indexes: []
     }
   end
 
